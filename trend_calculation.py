@@ -1,6 +1,6 @@
 ﻿import pandas as pd
 import numpy as np
-from typing import List, Dict, Tuple, Optional, Callable
+from typing import List, Tuple, Optional
 import os
 import threading
 import pandas.api.types as pd_types
@@ -735,11 +735,3 @@ def debug_luecken_untersuchung(
             dbgfile.write(f"D -> ?????\n")
         dbgfile.write(f"\nzeit_B -> {zeit_B}\n")
         dbgfile.write(f"zeit_C -> {zeit_C}\n")
-
-
-def workflow_pipeline(rohdaten: pd.DataFrame) -> Tuple[pd.DataFrame, List[ArmConnection]]:
-    ha_data = calculate_ha(rohdaten)
-    ha_data = remove_isolated_candles(ha_data)
-    arms = detect_trend_arms(ha_data)
-
-

@@ -1,24 +1,21 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Importe der benötigten Module
-from data_processing import download_data, prepare_data 
+from data_processing import download_data, prepare_data, bestimme_heikin_ashi_farbe
 from trend_calculation import calculate_ha, detect_trend_arms, ArmContainer, berechne_verbindungslinien
 from output_handling import save_to_csv, plot_ha_with_trend_arms, BASE_OUTPUT_DIR
-from output_handling import dump_plot_arms_to_txt, generate_plot_arms
-from output_handling import save_ha_kerzen_csv
-
+from output_handling import dump_plot_arms_to_txt, generate_plot_arms, save_ha_kerzen_csv
+from workflow_pipeline import workflow_pipeline
 
 import pandas as pd
 import os
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
-from typing import Optional
-from data_processing import bestimme_heikin_ashi_farbe
 
 # --- KONFIGURATION ---
-TICKER = "ETH-USD" 
-INTERVAL = "5m" 
+TICKER = "ETH-USD"
+INTERVAL = "5m"
 HOURS_TO_ANALYZE = 12
 
 def main():
@@ -28,8 +25,12 @@ def main():
     print("="*60 + "\n")
     
     try:
+        # Output-Verzeichnisse sicherstellen
+        os.makedirs(BASE_OUTPUT_DIR, exist_ok=True)
+        os.makedirs(r"D:\TradingBot\output", exist_ok=True)
+
         # 1. Daten herunterladen und vorbereiten
-        end_date = datetime.now() 
+        end_date = datetime.now()
         start_date = end_date - timedelta(hours=HOURS_TO_ANALYZE)
         
         raw_data = download_data(TICKER, start_date, end_date, INTERVAL)
@@ -46,37 +47,34 @@ def main():
             
         print(f"✅ Rohdaten erfolgreich vorbereitet. {len(original_data)} Kerzen verbleiben.")
 
-        # 2. Heikin-Ashi Kerzen berechnen
-        print("⏳ Berechne Heikin-Ashi Daten...")
-        ha_data = calculate_ha(original_data)
-        ha_data['Farbe'] = bestimme_heikin_ashi_farbe(ha_data)
-        
+        # 2. Zentrale Pipeline aufrufen (inklusive Debug-Ausgaben)
+        print("⏳ Starte zentrale Workflow-Pipeline (inkl. Kontroll-CSV-Ausgaben)...")
+        ha_data, arms = workflow_pipeline(original_data)
+
         if ha_data.empty:
             raise ValueError("Heikin-Ashi Daten konnten nicht berechnet werden.")
 
         print(f"✅ Heikin-Ashi Daten erfolgreich berechnet. {len(ha_data)} HA-Kerzen.")
+        print(f"✅ {len(arms)} Trendarme erkannt.")
 
-        # 3. Trendarme erkennen
-        print("🔍 Erkenne Trendarme in den Heikin-Ashi Daten...")
-        arms = detect_trend_arms(ha_data)
-        
+        # Optional: Heikin-Ashi-Farbe berechnen (falls benötigt)
+        if 'Farbe' not in ha_data.columns:
+            ha_data['Farbe'] = bestimme_heikin_ashi_farbe(ha_data)
+
+        # 3. Trendarme in ArmContainer
         arm_container = ArmContainer(debug_mode=True)
         for arm_obj in arms:
             arm_container.add_arm(arm_obj)
         
-        print(f"✅ {len(arm_container.arms)} Trendarme erkannt.")
-
         # 4. Validierung der Trendarme
         print(f"ℹ️ Starte Validierung der Trendarme auf Heikin-Ashi Daten...")
         arm_container.validate_arms(ha_data) 
-        # Nach der Validierung: validierte Arme extrahieren
         validated_arms = [arm for arm in arm_container.arms if arm.validated]
         print(f"✅ Validierung abgeschlossen. Ergebnisse in 'output/arm_validation_debug.txt'.")
 
-        # 5. Zentrale Erzeugung der Verbindungslinien-Liste
+        # 5. Verbindungslinien berechnen
         verbindungen_liste = berechne_verbindungslinien(validated_arms, ha_data)
 
-        # Debug-Ausgabe: alle Verbindungslinien wie im Plot
         print("\n[DEBUG] Verbindungslinien (C-Serie):")
         for idx, verbindung in enumerate(verbindungen_liste, start=1):
             print(f"C{idx}: {verbindung}")
