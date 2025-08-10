@@ -1,0 +1,31 @@
+Bericht: Architektur für explizite und persistente Trendarme aus Verbindungslinien
+
+Stand: 2025-08-05
+
+Zielsetzung:
+-------------
+1. Die im Plot gezeigten Trendarme (A1, A2, ..., A8) – also die aus Verbindungslinien abgeleiteten "Plot-Arme" – werden in einer expliziten, persistenten Datenstruktur (plot_arms) abgelegt.
+2. Die Trendbruchprüfung und weitere Algorithmen operieren künftig bevorzugt auf diesen Plot-Armen, nicht auf den alten validierten Armen.
+3. Die Funktion generiere_verbindungslinien erstellt zunächst Verbindungsdaten (Dicts), die anschließend in echte ArmConnection-Objekte zur weiteren Verwendung überführt werden.
+4. Damit sind die gezeigten Trendarme nicht mehr nur Visualisierung, sondern explizite, für Analysen nutzbare Objekte.
+
+Status der Umsetzung:
+---------------------
+- Die Klasse ArmConnection kapselt sämtliche benötigten Trendarm-Informationen.
+- Im ArmContainer werden die abgeleiteten Trendarme in self.plot_arms gespeichert.
+- Die Funktion generate_plot_arms erzeugt aus den Verbindungslinien (aus generiere_verbindungslinien) persistente ArmConnection-Objekte für plot_arms.
+- Die Trendbruchprüfung arbeitet bereits bevorzugt auf self.plot_arms, falls diese gesetzt sind.
+- Die Architektur stellt damit sicher, dass Analysen und Prüfungen auf der tatsächlichen Plot-Linie-Logik basieren.
+
+Empfohlene nächste Schritte:
+----------------------------
+- Optional: Die Funktion generiere_verbindungslinien kann direkt ArmConnection-Objekte erzeugen und zurückgeben, sodass der Zwischenschritt über Dicts entfällt.
+- Sämtliche weiteren Algorithmen (z.B. Trendbruch, Visualisierung, Export) sollten ausschließlich auf self.plot_arms (bzw. deren Kopien) arbeiten, um Inkonsistenzen zu vermeiden.
+- Die Architektur ist modular und wartbar, Änderungen an der Logik der Verbindungslinien wirken sich direkt auf alle Analysen aus.
+
+Fazit:
+------
+Das Ziel einer expliziten, persistierbaren Datenstruktur für Trendarme aus den Verbindungslinien ist zu 90% erreicht. Die Grundlage für weitere algorithmische Analysen und robuste Trendbruchprüfungen ist gelegt.
+
+Erstellungszeitpunkt: 2025-08-05 10:55 UTC
+Autor: GitHub Copilot für dgomescouto-sys
