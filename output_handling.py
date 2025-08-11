@@ -1,14 +1,20 @@
-﻿import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from matplotlib.dates import MinuteLocator, DateFormatter
-from typing import List, Dict, Optional, Tuple
-import os
-import numpy as np
+﻿import os
 from datetime import datetime, timedelta
-from trend_calculation import berechne_verbindungslinien
+from typing import List
 
-from trend_calculation import ArmContainer, ArmConnection
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.dates import DateFormatter, MinuteLocator
+
+from trend_calculation import (
+    ArmConnection,
+    ArmContainer,
+    berechne_verbindungslinien,
+    find_max_high_in_range,
+    find_min_low_in_range,
+)
 
 BASE_OUTPUT_DIR = "D:\\TradingBot\\output"
 
@@ -23,29 +29,7 @@ def debug_verbindungen_liste(verbindungen_liste, serie_typ, file_path):
             f.write(f"Ende={v.get('ende')}\n")
         f.write("===== Ende Debug-Ausgabe =====\n")
 
-def find_max_high_in_range(data: pd.DataFrame, start_idx: int, end_idx: int) -> Tuple[Optional[float], Optional[int]]:
-    search_slice = data.loc[start_idx:end_idx]
-    if search_slice.empty:
-        return None, None
-    max_high = search_slice['High'].max()
-    max_high_idx = search_slice['High'].idxmax()
-    return max_high, max_high_idx
-
-def find_min_low_in_range(data: pd.DataFrame, start_idx: int, end_idx: int) -> Tuple[Optional[float], Optional[int]]:
-    search_slice = data.loc[start_idx:end_idx]
-    if search_slice.empty:
-        return None, None
-    min_low = search_slice['Low'].min()
-    min_low_idx = search_slice['Low'].idxmin()
-    return min_low, min_low_idx
-
-#-----------------------------------------------------------------------------------
 def generate_plot_arms(verbindungen_liste, ha_data, serie_typ: str = "unbekannt") -> List[ArmConnection]:
-    """
-    Erzeugt Plot-Arme zur Visualisierung aus einer Verbindungs-Liste (z.B. von berechne_verbindungslinien).
-    Eintrag in self.plot_arms (ersetzt die bisherige Liste).
-    """
-    # Debug: Eingangszustand der Verbindungen
     debug_file = os.path.join(BASE_OUTPUT_DIR, "C-Serie-Debug-Ausgaben5.txt")
     debug_verbindungen_liste(verbindungen_liste, serie_typ + " (PlotArms Eingang)", debug_file)
 
@@ -80,7 +64,6 @@ def generate_plot_arms(verbindungen_liste, ha_data, serie_typ: str = "unbekannt"
             )
             plot_arms.append(arm)
         elif v['typ'] == 'B-D-C':
-            # Zwei Teil-Arme für die Plot-Visualisierung
             start_idx, start_price = v['start']
             mitte_idx, mitte_price = v['mitte']
             end_idx, end_price = v['ende']
@@ -106,8 +89,6 @@ def generate_plot_arms(verbindungen_liste, ha_data, serie_typ: str = "unbekannt"
             )
             plot_arms.append(arm1)
             plot_arms.append(arm2)
-        # Optional: weitere Typen behandeln
-
     # Debug-Ausgabe in Datei schreiben (PlotArms)
     with open(debug_file, "a", encoding="utf-8") as f:
         f.write("\n[OUTPUT] Plot Arms nach generate_plot_arms:\n")
@@ -121,39 +102,13 @@ def generate_plot_arms(verbindungen_liste, ha_data, serie_typ: str = "unbekannt"
         f.write("-" * 50 + "\n")
 
     return plot_arms
-#---------------------------------------------------------------------
+
 def plot_ha_with_trend_arms(
-    ha_data: pd.DataFrame,
-    arm_container: ArmContainer,
-    ticker: str,
-    interval: str,
-    show_plot_a: bool = True,
-    show_plot_b: bool = True,
-    show_plot_c: bool = True
+    ha_data, arm_container, ticker, interval,
+    show_plot_a=True, show_plot_b=True, show_plot_c=True
 ):
-    """
-    Plottet Heikin-Ashi Chart mit auswählbaren Trendarmen
-    
-    Parameter:
-    ----------
-    ha_data : pd.DataFrame
-        Heikin-Ashi Daten mit 'Zeit', 'Open', 'High', 'Low', 'Close', 'Trend'
-    arm_container : ArmContainer
-        Container mit den Trendarm-Informationen
-    ticker : str
-        Name des gehandelten Instruments
-    interval : str
-        Zeitintervall der Kerzen (z.B. '5m', '15m', '1h')
-    show_plot_a : bool, optional
-        Ob originelle Trendarme (A1, A2,...) gezeigt werden sollen (default: True)
-    show_plot_b : bool, optional
-        Ob validierte Trendarme (B1, B2,...) gezeigt werden sollen (default: True)
-    show_plot_c : bool, optional
-        Ob Verbindungslinien (C1, C2,...) gezeigt werden sollen (default: True)
-    """
     if 'Zeit' not in ha_data.columns:
         raise ValueError("Die Spalte 'Zeit' muss im ha_data DataFrame vorhanden sein.")
-    
     ha_data['Zeit'] = pd.to_datetime(ha_data['Zeit'])
 
     plt.style.use('seaborn-v0_8-whitegrid')
@@ -211,69 +166,24 @@ def plot_ha_with_trend_arms(
     # --- Verbindungslinien aus validierten Armen: C1, C2, ... ---
     if show_plot_c:
         validated_arms = [arm for arm in getattr(arm_container, "arms", []) 
-                         if getattr(arm, "validated", False)]
+                          if getattr(arm, "validated", False)]
         if validated_arms:
-            verbindung_count = 1
             verbindungen_liste = berechne_verbindungslinien(validated_arms, ha_data)
-            for verbindung in verbindungen_liste:
-                if verbindung['typ'] == 'B1':
-                    start_idx, start_y = verbindung['start']
-                    end_idx, end_y = verbindung['ende']
-                    ax.plot(
-                        [dates[start_idx], dates[end_idx]],
-                        [start_y, end_y],
-                        color='blue', linewidth=1.2, linestyle=':', zorder=9
-                    )
-                    mid_x = (dates[start_idx] + dates[end_idx]) / 2
-                    mid_y = (start_y + end_y) / 2
+            plot_arms = generate_plot_arms(verbindungen_liste, ha_data)
+            verbindung_count = 1
+            for arm in plot_arms:
+                if 0 <= arm.start_idx < len(ha_data) and 0 <= arm.end_idx < len(ha_data):
+                    x_coords = [dates[arm.start_idx], dates[arm.end_idx]]
+                    y_coords = [arm.start_price, arm.end_price]
+                    ax.plot(x_coords, y_coords, color='blue', linewidth=1.2, linestyle=':', zorder=9)
+                    mid_x = (x_coords[0] + x_coords[1]) / 2
+                    mid_y = (y_coords[0] + y_coords[1]) / 2
                     label = f"C{verbindung_count}"
                     ax.text(mid_x, mid_y, label, fontsize=11, color='blue', 
-                            fontweight='bold', zorder=11)
-                    verbindung_count += 1
-                elif verbindung['typ'] == 'B-C':
-                    start_idx, start_y = verbindung['start']
-                    end_idx, end_y = verbindung['ende']
-                    ax.plot(
-                        [dates[start_idx], dates[end_idx]],
-                        [start_y, end_y],
-                        color='blue', linewidth=1.2, linestyle=':', zorder=9
-                    )
-                    mid_x = (dates[start_idx] + dates[end_idx]) / 2
-                    mid_y = (start_y + end_y) / 2
-                    label = f"C{verbindung_count}"
-                    ax.text(mid_x, mid_y, label, fontsize=11, color='blue', 
-                            fontweight='bold', zorder=11)
-                    verbindung_count += 1
-                elif verbindung['typ'] == 'B-D-C':
-                    start_idx, start_y = verbindung['start']
-                    mitte_idx, mitte_y = verbindung['mitte']
-                    end_idx, end_y = verbindung['ende']
-                    # Teil 1: B-D
-                    ax.plot(
-                        [dates[start_idx], dates[mitte_idx]],
-                        [start_y, mitte_y],
-                        color='blue', linewidth=1.2, linestyle=':', zorder=9
-                    )
-                    mid_x1 = (dates[start_idx] + dates[mitte_idx]) / 2
-                    mid_y1 = (start_y + mitte_y) / 2
-                    label1 = f"C{verbindung_count}"
-                    ax.text(mid_x1, mid_y1, label1, fontsize=11, color='blue', 
-                            fontweight='bold', zorder=11)
-                    verbindung_count += 1
-                    # Teil 2: D-C
-                    ax.plot(
-                        [dates[mitte_idx], dates[end_idx]],
-                        [mitte_y, end_y],
-                        color='blue', linewidth=1.2, linestyle=':', zorder=9
-                    )
-                    mid_x2 = (dates[mitte_idx] + dates[end_idx]) / 2
-                    mid_y2 = (mitte_y + end_y) / 2
-                    label2 = f"C{verbindung_count}"
-                    ax.text(mid_x2, mid_y2, label2, fontsize=11, color='blue', 
                             fontweight='bold', zorder=11)
                     verbindung_count += 1
 
-    # Restliche Plot-Einstellungen (Achsen, Grid, etc.)
+    # Restliche Plot-Einstellungen
     ax.xaxis.set_major_locator(MinuteLocator(interval=15))
     ax.xaxis.set_major_formatter(DateFormatter('%H:%M'))
     ax.tick_params(axis='x', labelsize=8)
@@ -282,27 +192,22 @@ def plot_ha_with_trend_arms(
     ax.grid(True, linestyle='--', alpha=0.6)
     plt.tight_layout()
 
-    # Automatische Skalierung der Achsen
+    # Achsenskalierung wie gehabt
     all_prices = []
     if not ha_data.empty:
         all_prices.extend(ha_data['High'].tolist())
         all_prices.extend(ha_data['Low'].tolist())
-    
     if show_plot_a and hasattr(arm_container, 'arms'):
         for arm in arm_container.arms:
             if arm.start_idx < len(ha_data) and arm.end_idx < len(ha_data):
                 all_prices.append(arm.start_price)
                 all_prices.append(arm.end_price)
-    
     if show_plot_b:
-        validated_arms = [arm for arm in getattr(arm_container, "arms", []) 
-                         if getattr(arm, "validated", False)]
         for arm in validated_arms:
             if arm.start_idx < len(ha_data) and arm.end_idx < len(ha_data):
                 all_prices.append(arm.start_price)
                 all_prices.append(arm.end_price)
-    
-    all_prices = [p for p in all_prices if pd.notna(p)]
+    all_prices = [p for p in all_prices if not np.isnan(p)]
     if all_prices:
         min_price = min(all_prices)
         max_price = max(all_prices)
@@ -335,7 +240,6 @@ def plot_ha_with_trend_arms(
         print(f"Fehler beim Speichern des Plots: {e}")
 
     return fig
-
 
 def save_to_csv(ha_data: pd.DataFrame, arm_container: ArmContainer, output_dir_param: str, ticker: str) -> str:
     os.makedirs(output_dir_param, exist_ok=True)
@@ -388,9 +292,6 @@ def save_to_csv(ha_data: pd.DataFrame, arm_container: ArmContainer, output_dir_p
     print(f"Daten und Trendarme in {csv_path} gespeichert.")
     return csv_path
 
-import os
-from datetime import datetime
-
 def save_ha_kerzen_csv(ha_data: pd.DataFrame, output_dir_param: str, ticker: str) -> str:
     os.makedirs(output_dir_param, exist_ok=True)
     
@@ -423,16 +324,11 @@ def save_ha_kerzen_csv(ha_data: pd.DataFrame, output_dir_param: str, ticker: str
     print(f"HA-Kerzen wurden in {csv_path} gespeichert.")
     return csv_path
 
-
-
-""
 def dump_plot_arms_to_txt(plot_arms: List[ArmConnection], file_path: str = "output/plot_arms_debug.txt"):
     import datetime
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(f"\n[INPUT] Validated Arms für update_plot_arms ({datetime.datetime.now().isoformat()}):\n")
         for i, arm in enumerate(plot_arms):
-            f.write(f"  B{i+1}: {arm.start_idx}-{arm.end_idx}, Richtung: {arm.direction}, validated: {arm.validated}\n")
+            f.write(f"  C{i+1}: {arm.start_idx}-{arm.end_idx}, Richtung: {arm.direction}, validated: {arm.validated}\n")
         f.write("-" * 50 + "\n")
         f.write(f"Anzahl Plot-Arms: {len(plot_arms)}\n")
-
-""

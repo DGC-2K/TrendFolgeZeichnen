@@ -155,6 +155,7 @@ class ArmConnection:
         except (KeyError, IndexError, ValueError):
             self._retracement_38_2_passed = False
 
+
 class ArmBoundaries:
     def __init__(self, upper: float, lower: float):
         self._upper = upper
@@ -192,6 +193,7 @@ class ArmBoundaries:
     def __str__(self):
         return f"Upper: {self.upper:.2f}, Lower: {self.lower:.2f}"
 
+
 class ArmContainer:
     def __init__(self, debug_mode: bool = True):
         self.arms: List[ArmConnection] = []
@@ -206,86 +208,6 @@ class ArmContainer:
         with self._lock:
             self.arms.append(arm)
 
-    def detect_trend_break_and_restart(self, ha_data: pd.DataFrame) -> None:
-        debug_path = r"D:\TradingBot\output\C-Serie-Debug-Ausgaben2.txt"
-        with open(debug_path, "a", encoding="utf-8") as dbgfile:
-            dbgfile.write(f"\n[C] C-Serie Status bei Eintritt detect_trend_break_and_restart ({datetime.datetime.now().isoformat()}):\n")
-            for i, c_arm in enumerate(self.plot_arms):
-                dbgfile.write(
-                    f"  C{i+1}: Kerzen {c_arm.start_idx}-{c_arm.end_idx}, "
-                    f"Richtung: {c_arm.direction}, "
-                    f"Status: {'broken' if c_arm.broken else 'ok'}, "
-                    f"validated: {c_arm.validated}\n"
-                )
-            dbgfile.write("-" * 50 + "\n")
-
-        c_arms = [arm for arm in self.plot_arms if not arm.broken]
-        if not c_arms or ha_data.empty:
-            return
-
-        last_validated_idx = None
-        for i in reversed(range(len(c_arms))):
-            if c_arms[i].validated:
-                last_validated_idx = i
-                break
-
-        if last_validated_idx is None:
-            return
-
-        last_validated_arm = c_arms[last_validated_idx]
-
-        if last_validated_arm.end_idx >= len(ha_data):
-            return
-
-        arm_data = ha_data.iloc[last_validated_arm.start_idx:last_validated_arm.end_idx + 1]
-        upper_bound = float(arm_data['High'].max())
-        lower_bound = float(arm_data['Low'].min())
-
-        if last_validated_arm.direction == "DOWN":
-            bound_value = upper_bound
-            cmp_op = lambda close: close > bound_value
-            new_trend_direction = "UP"
-        elif last_validated_arm.direction == "UP":
-            bound_value = lower_bound
-            cmp_op = lambda close: close < bound_value
-            new_trend_direction = "DOWN"
-        else:
-            return
-
-        closes = []
-        for arm in c_arms:
-            if arm.end_idx >= len(ha_data):
-                return
-            closes.append(float(ha_data.iloc[arm.end_idx]['Close']))
-
-        start_arm_idx = last_validated_idx + 1
-
-        found_break = False
-        for i in range(start_arm_idx, len(closes) - 2):
-            trio = closes[i:i + 3]
-            if all(cmp_op(c) for c in trio):
-                found_break = True
-                for arm in c_arms:
-                    arm.broken = True
-                self.broken_arms.extend(c_arms)
-                self.arms = []
-                self.plot_arms = []
-
-                start_idx = last_validated_arm.end_idx
-                start_price = last_validated_arm.end_price
-                new_arm = ArmConnection(
-                    arm_num=1,
-                    direction=new_trend_direction,
-                    start_idx=start_idx,
-                    end_idx=start_idx,
-                    start_price=start_price,
-                    end_price=start_price,
-                    validated=False
-                )
-                new_arm.broken = False
-                self.add_arm(new_arm)
-                break
-
     def update_plot_arms(self, validated_arms: list, ha_data):
         verbindungen_liste = berechne_verbindungslinien(validated_arms, ha_data)
         self.plot_arms = []
@@ -296,6 +218,7 @@ class ArmContainer:
             for i, v in enumerate(validated_arms):
                 dbgfile.write(f"  B{i+1}: {v.start_idx}-{v.end_idx}, Richtung: {v.direction}, validated: {v.validated}\n")
             dbgfile.write("-" * 50 + "\n")
+
 
         for verbindung in verbindungen_liste:
             start_idx, start_price = verbindung['start']
@@ -311,6 +234,7 @@ class ArmContainer:
                 end_price=end_price,
                 validated=True
             )
+
 
             if 'mitte' in verbindung:
                 mid_idx, mid_price = verbindung['mitte']
@@ -387,8 +311,12 @@ class ArmContainer:
                     self._adjust_bounds_to_candle_extremes(ha_data, naechste_kerze_idx, None)
 
             self.update_plot_arms([arm for arm in self.arms if arm.validated], ha_data)
-            self.detect_trend_break_and_restart(ha_data)
+            dump_plot_arms_to_txt(self.plot_arms, prefix="Plot-Arms-Dump", filename=r"D:\TradingBot\output\DumpPA.txt")
+            from trend_break_detector import TrendBreakDetector
 
+            dump_plot_arms_to_txt(self.plot_arms, prefix="Vor Trendbruch-Check", filename=r"D:\TradingBot\output\DumpPA2.txt")
+            TrendBreakDetector.detect_trend_break_and_restart(self, ha_data)
+            dump_plot_arms_to_txt(self.plot_arms, prefix="Nach Trendbruch-Check", filename=r"D:\TradingBot\output\DumpPA2.txt")
     def _adjust_bounds_to_candle_extremes(self, ha_data: pd.DataFrame, target_idx: int, debug_file) -> None:
         if target_idx >= len(ha_data):
             return
@@ -421,6 +349,7 @@ class ArmContainer:
         self.bounds.upper = float(arm_data['High'].max())
         self.bounds.lower = float(arm_data['Low'].min())
         self.bounds_source_arm_num = arm.arm_num
+
 
 def calculate_ha(data: pd.DataFrame) -> pd.DataFrame:
     if data.empty:
@@ -484,6 +413,7 @@ def calculate_ha(data: pd.DataFrame) -> pd.DataFrame:
 
     return result_df
 
+
 def kerzenfarbe(open_, close_):
     if close_ > open_:
         return "bullish"
@@ -491,6 +421,7 @@ def kerzenfarbe(open_, close_):
         return "bearish"
     else:
         return "doji"
+
 
 def remove_isolated_candles(df: pd.DataFrame) -> pd.DataFrame:
     to_remove = []
@@ -509,6 +440,7 @@ def remove_isolated_candles(df: pd.DataFrame) -> pd.DataFrame:
                 to_remove.append(i)
 
     return df.drop(df.index[to_remove]).reset_index(drop=True)
+
 
 def detect_trend_arms(ha_data: pd.DataFrame) -> List[ArmConnection]:
     if ha_data.empty:
@@ -590,6 +522,7 @@ def detect_trend_arms(ha_data: pd.DataFrame) -> List[ArmConnection]:
 
     return arms
 
+
 def find_max_high_in_range(data: pd.DataFrame, start_idx: int, end_idx: int) -> Tuple[Optional[float], Optional[int]]:
     search_slice = data.loc[start_idx:end_idx]
     if search_slice.empty:
@@ -597,6 +530,7 @@ def find_max_high_in_range(data: pd.DataFrame, start_idx: int, end_idx: int) -> 
     max_high = search_slice['High'].max()
     max_high_idx = search_slice['High'].idxmax()
     return max_high, max_high_idx
+
 
 def find_min_low_in_range(data: pd.DataFrame, start_idx: int, end_idx: int) -> Tuple[Optional[float], Optional[int]]:
     search_slice = data.loc[start_idx:end_idx]
@@ -606,12 +540,11 @@ def find_min_low_in_range(data: pd.DataFrame, start_idx: int, end_idx: int) -> T
     min_low_idx = search_slice['Low'].idxmin()
     return min_low, min_low_idx
 
-#----------------------------------------------------------------------------------------
 
 def berechne_verbindungslinien(validated_arms, data):
     verbindungen_liste = []
 
-    # B1 als eigene Verbindung hinzufügen, wenn mindestens ein valider Arm existiert
+    # Optional: erste Trendarm-Verbindung (B1) wie gehabt
     if validated_arms:
         arm_0 = validated_arms[0]
         verbindungen_liste.append({
@@ -620,91 +553,60 @@ def berechne_verbindungslinien(validated_arms, data):
             'typ': 'B1'
         })
 
-    """
-    Zeichnet Verbindungslinien zwischen validierten Armen gemäß folgender Regeln:
-    - A, B, C, D sind Kerzenextremwerte (Heikin-Ashi).
-    - A und B = Start-/Endpunkt validierter Trendarm A_i
-    - C = Endpunkt validierter Trendarm A_{i+1}
-    - D = höchster/tiefster Punkt zwischen B und C
-
-    Regeln:
-    - Wenn (A > B) & (C < B): D = Hoch zw. B und C; Wenn (D > B) => B-D & D-C verbinden
-    - Wenn (B > A) & (C > B): D = Tief zw. B und C; Wenn (D < B) => B-D & D-C verbinden
-    - Wenn (C > A > B) oder (C < A < B): B-C verbinden
-
-    Zusatzregel: Für B-D-C gilt jetzt auch: Zeit(B) < Zeit(D) < Zeit(C)
-    """
-
     for i in range(len(validated_arms) - 1):
         arm_i = validated_arms[i]
         arm_j = validated_arms[i + 1]
+
+        # A, B, C: jeweilige Extremwerte
         A = arm_i.start_price
         B = arm_i.end_price
         C = arm_j.end_price
+
         b_idx_pos = arm_i.end_idx
         c_idx_pos = arm_j.end_idx
 
-        zeit_B = data.loc[b_idx_pos, "Zeit"]
-        zeit_C = data.loc[c_idx_pos, "Zeit"]
+        # 1) Aufwärtsfall: A < B < C
+        if A < B < C:
+            # Tiefster Punkt (Low) zwischen B und C (exklusive B und C)
+            if b_idx_pos + 1 < c_idx_pos:
+                idx_bis_c = data.index[(data.index > b_idx_pos) & (data.index < c_idx_pos)]
+                if not idx_bis_c.empty:
+                    min_idx = data.loc[idx_bis_c, "Low"].idxmin()
+                    D = data.loc[min_idx, "Low"]
+                    if D < B:
+                        verbindungen_liste.append({
+                            'start': (b_idx_pos, B),
+                            'mitte': (data.index.get_loc(min_idx), D),
+                            'ende': (c_idx_pos, C),
+                            'typ': 'B-D-C'
+                        })
 
-        # Initialisiere d_idx und D mit None
-        d_idx = None
-        D = None
+        # 2) Abwärtsfall: A > B > C
+        elif A > B > C:
+            # Höchster Punkt (High) zwischen B und C (exklusive B und C)
+            if b_idx_pos + 1 < c_idx_pos:
+                idx_bis_c = data.index[(data.index > b_idx_pos) & (data.index < c_idx_pos)]
+                if not idx_bis_c.empty:
+                    max_idx = data.loc[idx_bis_c, "High"].idxmax()
+                    D = data.loc[max_idx, "High"]
+                    if D > B:
+                        verbindungen_liste.append({
+                            'start': (b_idx_pos, B),
+                            'mitte': (data.index.get_loc(max_idx), D),
+                            'ende': (c_idx_pos, C),
+                            'typ': 'B-D-C'
+                        })
 
-        if arm_i.direction == 'DOWN' and arm_j.direction == 'DOWN':
-            D, d_idx = find_max_high_in_range(data, b_idx_pos, c_idx_pos)
-            zeit_D = data.loc[d_idx, "Zeit"] if D is not None else None
-            if D is not None and D > B and zeit_B < zeit_D < zeit_C:
-                verbindungen_liste.append({
-                    'start': (b_idx_pos, B),
-                    'mitte': (data.index.get_loc(d_idx), D),
-                    'ende': (c_idx_pos, C),
-                    'typ': 'B-D-C'
-                })
-
-        elif arm_i.direction == 'UP' and arm_j.direction == 'UP':
-            D, d_idx = find_min_low_in_range(data, b_idx_pos, c_idx_pos)
-            zeit_D = data.loc[d_idx, "Zeit"] if D is not None else None
-            if D is not None and D < B and zeit_B < zeit_D < zeit_C:
-                verbindungen_liste.append({
-                    'start': (b_idx_pos, B),
-                    'mitte': (data.index.get_loc(d_idx), D),
-                    'ende': (c_idx_pos, C),
-                    'typ': 'B-D-C'
-                })
-
-        bc_rule = (C > A and A > B) or (C < A and A < B)
-        if bc_rule:
+        # 3) C < A < B oder C > A > B
+        elif (C < A < B) or (C > A > B):
             verbindungen_liste.append({
                 'start': (b_idx_pos, B),
                 'ende': (c_idx_pos, C),
                 'typ': 'B-C'
             })
 
-        # Debug-Aufruf immer am Ende des Schleifendurchlaufs, mit aktuellen d_idx und D (auch wenn None)
-        debug_luecken_untersuchung(arm_i, arm_j, data, d_idx, D)
-
-    debug_path = r"D:\TradingBot\output\C-Serie-Debug-Ausgaben3.txt"
-    with open(debug_path, "a", encoding="utf-8") as dbgfile:
-        # Aktuelle Zeit mit Zeitzone (UTC)
-        current_time = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds')
-
-        dbgfile.write(f"\n[C] C-Serie Status bei Rückgabe von berechne_verbindungslinien ({current_time}):\n")
-        for i, verbindung in enumerate(verbindungen_liste):
-            start_idx, start_price = verbindung.get('start', ('?', '?'))
-            end_idx, end_price = verbindung.get('ende', ('?', '?'))
-            richtung = "UP" if end_price > start_price else "DOWN"
-            dbgfile.write(
-                f"  C{i+2}: Kerzen {start_idx}-{end_idx}, Richtung: {richtung}"
-            )
-            if 'mitte' in verbindung:
-                mitte_idx, mitte_price = verbindung['mitte']
-                dbgfile.write(f", Mitte: {mitte_idx} ({mitte_price:.2f})")
-            dbgfile.write(f", Typ: {verbindung.get('typ','?')}\n")
-        dbgfile.write("-" * 50 + "\n")
-
     return verbindungen_liste
-#----------------------------------------------------------------------------------------
+
 
 def debug_luecken_untersuchung(
     arm_i, arm_j, data, d_idx=None, D=None, debug_path=r"D:\TradingBot\output\Luecken_Untersuchung.txt"
@@ -735,3 +637,17 @@ def debug_luecken_untersuchung(
             dbgfile.write(f"D -> ?????\n")
         dbgfile.write(f"\nzeit_B -> {zeit_B}\n")
         dbgfile.write(f"zeit_C -> {zeit_C}\n")
+
+
+def dump_plot_arms_to_txt(plot_arms, prefix="Plot-Arms-Dump", filename=r"D:\TradingBot\output\DumpPA.txt"):
+    import datetime
+    dt = datetime.datetime.now()
+    with open(filename, "a", encoding="utf-8") as f:
+        f.write(f"\n[{prefix}] ({dt.strftime('%Y-%m-%d %H:%M:%S.%f')}):\n")
+        for idx, arm in enumerate(plot_arms, start=1):
+            f.write(
+                f"  C{idx}: start_idx={getattr(arm, 'start_idx', '-')}, end_idx={getattr(arm, 'end_idx', '-')}, Richtung: {getattr(arm, 'direction', '-')}, broken: {getattr(arm, 'broken', '-')}, validated: {getattr(arm, 'validated', '-')}\n"
+            )
+        f.write("-" * 50 + "\n")
+        f.write(f"Anzahl Plot-Arms: {len(plot_arms)}\n")
+        f.write("-" * 50 + "\n")

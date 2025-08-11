@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 
 # --- KONFIGURATION ---
 TICKER = "ETH-USD"
-INTERVAL = "5m"
-HOURS_TO_ANALYZE = 12
+INTERVAL = "2m"
+HOURS_TO_ANALYZE = 5
 
 def main():
     print("\n" + "="*60)
@@ -89,7 +89,7 @@ def main():
             ticker=TICKER,
             interval=INTERVAL,
             show_plot_a=False,  # Original-Trendarme (A1, A2,...) ausblenden
-            show_plot_b=False,  # Validierte Trendarme (B1, B2,...) ausblenden
+            show_plot_b=True,  # Validierte Trendarme (B1, B2,...) ausblenden
             show_plot_c=True    # Nur Verbindungslinien (C1, C2,...) anzeigen
         )
         
