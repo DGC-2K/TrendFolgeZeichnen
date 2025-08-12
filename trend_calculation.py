@@ -608,37 +608,6 @@ def berechne_verbindungslinien(validated_arms, data):
     return verbindungen_liste
 
 
-def debug_luecken_untersuchung(
-    arm_i, arm_j, data, d_idx=None, D=None, debug_path=r"D:\TradingBot\output\Luecken_Untersuchung.txt"
-):
-    import datetime
-
-    arm_i_repr = getattr(arm_i, "_debug_idx", "?")
-    arm_j_repr = getattr(arm_j, "_debug_idx", "?")
-    zeit_B = data.loc[arm_i.end_idx, 'Zeit'] if hasattr(data, "loc") and arm_i.end_idx in data.index else "?"
-    zeit_C = data.loc[arm_j.end_idx, 'Zeit'] if hasattr(data, "loc") and arm_j.end_idx in data.index else "?"
-
-    # Zeilen nach deinem Wunsch
-    with open(debug_path, "a", encoding="utf-8") as dbgfile:
-        current_time = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds")
-        dbgfile.write(f"\n[LUECKE-DEBUG] Start {current_time}\n")
-        dbgfile.write(f"arm_i -> validated_arms[{arm_i_repr}]\n")
-        dbgfile.write(f"arm_j -> validated_arms[{arm_j_repr}]\n")
-        dbgfile.write(f"arm_i.direction -> {arm_i.direction}\n")
-        dbgfile.write(f"arm_j.direction -> {arm_j.direction}\n")
-        dbgfile.write(f"A -> {arm_i.start_price} = arm_i.start_idx -> {arm_i.start_idx}\n")
-        dbgfile.write(f"B -> {arm_i.end_price} = arm_i.end_idx -> {arm_i.end_idx}\n")
-        dbgfile.write(f"C -> {arm_j.end_price} = arm_j.end_idx -> {arm_j.end_idx}\n")
-        if D is not None and d_idx is not None:
-            dbgfile.write(f"D -> {D} = d_idx -> {d_idx}\n")
-        elif D is not None:
-            dbgfile.write(f"D -> {D}\n")
-        else:
-            dbgfile.write(f"D -> ?????\n")
-        dbgfile.write(f"\nzeit_B -> {zeit_B}\n")
-        dbgfile.write(f"zeit_C -> {zeit_C}\n")
-
-
 def dump_plot_arms_to_txt(plot_arms, prefix="Plot-Arms-Dump", filename=r"D:\TradingBot\output\DumpPA.txt"):
     import datetime
     dt = datetime.datetime.now()
