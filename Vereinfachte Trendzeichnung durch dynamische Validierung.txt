@@ -1,0 +1,59 @@
+Vereinfachte Trendzeichnung durch dynamische Validierung
+
+Konzept:
+Die Trendanalyse wird durch Verzicht auf die B-Serie vereinfacht. Stattdessen werden Trendarme während der C-Serie-Generierung dynamisch validiert.
+
+---
+### Validierungsregel für Trendarme
+
+1. Initialbedingung:
+   - Trendarm 1 (Arm_i) ist immer valide.
+
+2. Validierung des nächsten Arms (Arm_i+1):
+   - Nach Start von Arm_i+1 müssen drei aufeinanderfolgende Schlusskurse auftreten, die:
+     - Entweder alle über der oberen Hilfslinie von Arm_i
+     oder alle unter der unteren Hilfslinie von Arm_i liegen.
+   - Einschränkungen:
+     - Die drei Closes dürfen sich nur über Arm_i+1 und Arm_i+2 erstrecken (nicht weiter).
+     - Mindestens eine Kerze muss zu Arm_i+1 gehören.
+     - Alle drei Kerzen müssen unterschiedliche Schlusskurse haben.
+
+---
+### Verbindungsregeln zwischen validen Trendarmen (Arm_i → Arm_i+1)
+
+Definitionen:
+- A, B, C, D sind Extremwerte (High/Low) von Heikin-Ashi-Kerzen:
+  - A, B: Start-/Endpunkt von Arm_i.
+  - C: Endpunkt von Arm_i+1.
+  - D: Höchster/tiefster Punkt zwischen B und C (trendabhängig).
+
+Regeln:
+
+1. Aufwärtstrend:
+   - Bedingung: A < B < C
+   - Aktion:
+     1. Ermittle D (tiefster Punkt zwischen B und C).
+     2. Falls D < B: Verbinde B–D (Korrektur) und D–C (Impuls).
+
+2. Abwärtstrend:
+   - Bedingung: A > B > C
+   - Aktion:
+     1. Ermittle D (höchster Punkt zwischen B und C).
+     2. Falls D > B: Verbinde B–D (Korrektur) und D–C (Impuls).
+
+3. Trendumkehr/Seitwärts:
+   - Bedingung: C < A < B oder C > A > B
+   - Aktion: Verbinde direkt B–C.
+
+---
+### C-Serie (Finale Trendarme)
+- Die nach diesen Regeln generierten Linien bilden die C-Serie (C₁, C₂, ..., Cₙ).
+- Sie repräsentiert das finale Trendmuster und dient als Basis für Analysen.
+
+Iteration:
+Die Schritte werden wiederholt, bis kein valider Trendarm mehr gefunden wird.
+
+---
+### Vorteil der Methode
+- Effizienz: Nur eine Funktion benötigt, die direkt aus Heikin-Ashi-Kerzen die C-Serie generiert.
+- Vereinfachung: Entfällt die separate Erzeugung der B-Serie.
